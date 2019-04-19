@@ -74,6 +74,46 @@ SiteSetting.automatically_download_gravatars = false
 
 SeedFu.seed
 
+class PreFab
+  class << self
+    attr_reader :generic_user
+
+    def prefabricate
+      @generic_user = Fabricate(:user)
+    end
+
+    def reload
+      @generic_user.reload
+    end
+  end
+end
+
+# RSpec doesn't have around(:suite), but we can fix that with fibers
+class FiberSuite
+  def initialize(config)
+    @config = config
+  end
+
+  def run
+    Fiber.yield
+  end
+end
+
+def around_suite(config, &blk)
+  suite = FiberSuite.new(config)
+  fiber = Fiber.new do
+    blk.call(suite)
+  end
+
+  config.before(:suite) do
+    fiber.resume
+  end
+
+  config.after(:suite) do
+    fiber.resume
+  end
+end
+
 RSpec.configure do |config|
   config.fail_fast = ENV['RSPEC_FAIL_FAST'] == "1"
   config.include Helpers
@@ -85,15 +125,28 @@ RSpec.configure do |config|
   config.order = 'random'
   config.infer_spec_type_from_file_location!
 
-  # If you're not using ActiveRecord, or you'd prefer not to run each of your
-  # examples within a transaction, remove the following line or assign false
-  # instead of true.
-  config.use_transactional_fixtures = true
-
   # If true, the base class of anonymous controllers will be inferred
   # automatically. This will be the default behavior in future versions of
   # rspec-rails.
   config.infer_base_class_for_anonymous_controllers = true
+
+  config.use_transactional_fixtures = false
+
+  around_suite(config) do |suite|
+    ActiveRecord::Base.transaction(joinable: false) do
+      PreFab.prefabricate
+      suite.run
+      raise ActiveRecord::Rollback
+    end
+  end
+
+  config.around(:each) do |example|
+    ActiveRecord::Base.transaction(joinable: false) do
+      PreFab.reload
+      example.run
+      raise ActiveRecord::Rollback
+    end
+  end
 
   config.before(:suite) do
     Sidekiq.error_handlers.clear
@@ -225,18 +278,10 @@ RSpec.configure do |config|
   # force a rollback after using a multisite connection.
   def test_multisite_connection(name)
     RailsMultisite::ConnectionManagement.with_connection(name) do
-      spec_exception = nil
-
-      ActiveRecord::Base.transaction do
-        begin
-          yield
-        rescue Exception => spec_exception
-        ensure
-          raise ActiveRecord::Rollback
-        end
+      ActiveRecord::Base.transaction(joinable: false) do
+        yield
+        raise ActiveRecord::Rollback
       end
-
-      raise spec_exception if spec_exception
     end
   end
 
