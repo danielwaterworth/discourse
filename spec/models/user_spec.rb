@@ -1315,12 +1315,12 @@ describe User do
       ).create
     end
 
-    it 'should only remove old, unactivated users' do
+    it 'should only remove old, unactivated users', without_prefab: true do
       User.purge_unactivated
       expect(User.real.all).to match_array([user, unactivated, unactivated_old_with_human_pm])
     end
 
-    it "does nothing if purge_unactivated_users_grace_period_days is 0" do
+    it "does nothing if purge_unactivated_users_grace_period_days is 0", without_prefab: true do
       SiteSetting.purge_unactivated_users_grace_period_days = 0
       User.purge_unactivated
       expect(User.real.all).to match_array([user, unactivated, unactivated_old, unactivated_old_with_system_pm, unactivated_old_with_human_pm])
@@ -1641,7 +1641,7 @@ describe User do
   end
 
   describe '.human_users' do
-    it 'should only return users with a positive primary key' do
+    it 'should only return users with a positive primary key', without_prefab: true do
       Fabricate(:user, id: -1979)
       user = Fabricate(:user)
 

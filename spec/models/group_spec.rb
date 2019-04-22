@@ -373,7 +373,7 @@ describe Group do
     expect(Group[:trust_level_2].user_ids).to include(user.id, user2.id)
   end
 
-  it "Correctly updates all automatic groups upon request" do
+  it "Correctly updates all automatic groups upon request", without_prefab: true do
     admin = Fabricate(:admin)
     user = Fabricate(:user)
     user.change_trust_level!(TrustLevel[2])

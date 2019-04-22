@@ -1,6 +1,6 @@
 require 'rails_helper'
 
-describe DestroyTask do
+describe DestroyTask, without_prefab: true do
 
   describe 'destroy topics' do
     let!(:c) { Fabricate(:category) }

@@ -1,6 +1,6 @@
 require 'rails_helper'
 
-describe DirectoryItemsController do
+describe DirectoryItemsController, without_prefab: true do
   let!(:user) { Fabricate(:user) }
   let!(:evil_trout) { Fabricate(:evil_trout) }
   let!(:walter_white) { Fabricate(:walter_white) }

@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe Jobs::FixPrimaryEmailsForStagedUsers do
-  it 'should clean up duplicated staged users' do
+  it 'should clean up duplicated staged users', without_prefab: true do
     common_email = 'test@reply'
 
     staged_user = Fabricate(:user, staged: true, active: false)

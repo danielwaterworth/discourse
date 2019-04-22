@@ -1,7 +1,7 @@
 require 'rails_helper'
 require_dependency 'admin_user_index_query'
 
-describe AdminUserIndexQuery do
+describe AdminUserIndexQuery, without_prefab: true do
   def real_users(query)
     query.find_users_query.where('users.id > 0')
   end

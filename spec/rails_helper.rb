@@ -88,32 +88,6 @@ class PreFab
   end
 end
 
-# RSpec doesn't have around(:suite), but we can fix that with fibers
-class FiberSuite
-  def initialize(config)
-    @config = config
-  end
-
-  def run
-    Fiber.yield
-  end
-end
-
-def around_suite(config, &blk)
-  suite = FiberSuite.new(config)
-  fiber = Fiber.new do
-    blk.call(suite)
-  end
-
-  config.before(:suite) do
-    fiber.resume
-  end
-
-  config.after(:suite) do
-    fiber.resume
-  end
-end
-
 RSpec.configure do |config|
   config.fail_fast = ENV['RSPEC_FAIL_FAST'] == "1"
   config.include Helpers
@@ -132,20 +106,31 @@ RSpec.configure do |config|
 
   config.use_transactional_fixtures = false
 
-  around_suite(config) do |suite|
-    ActiveRecord::Base.transaction(joinable: false) do
-      PreFab.prefabricate
-      suite.run
-      raise ActiveRecord::Rollback
-    end
+  config.after(:suite) do
+    connection = ActiveRecord::Base.connection
+    connection.rollback_transaction if connection.transaction_open?
   end
 
   config.around(:each) do |example|
-    ActiveRecord::Base.transaction(joinable: false) do
-      PreFab.reload
-      example.run
-      raise ActiveRecord::Rollback
+    connection = ActiveRecord::Base.connection
+
+    undo_prefab = example.metadata[:without_prefab]
+
+    if undo_prefab
+      connection.rollback_transaction if connection.transaction_open?
+    else
+      unless connection.transaction_open?
+        ActiveRecord::Base.connection.begin_transaction(joinable: false)
+        PreFab.prefabricate
+      end
     end
+
+    ActiveRecord::Base.connection.begin_transaction(joinable: false)
+    unless undo_prefab
+      PreFab.reload
+    end
+    example.run
+    connection.rollback_transaction if connection.transaction_open?
   end
 
   config.before(:suite) do
