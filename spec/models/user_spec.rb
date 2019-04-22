@@ -1434,7 +1434,7 @@ describe User do
 
   describe "number_of_deleted_posts" do
 
-    let(:user) { Fabricate(:user, id: 2) }
+    let(:user) { Fabricate(:user) }
     let(:moderator) { Fabricate(:moderator) }
 
     it "counts all the posts" do
