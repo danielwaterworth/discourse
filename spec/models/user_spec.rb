@@ -298,7 +298,7 @@ describe User do
     end
 
     it 'does not validate ip_address when updating an existing user' do
-      u = Fabricate(:user)
+      u = user
       u.ip_address = '87.123.23.11'
       AllowedIpAddressValidator.any_instance.expects(:validate_each).never
       u.valid?
@@ -402,34 +402,29 @@ describe User do
   end
 
   describe 'email_hash' do
-    before do
-      @user = Fabricate(:user)
-    end
-
     it 'should have a sane email hash' do
-      expect(@user.email_hash).to match(/^[0-9a-f]{32}$/)
+      expect(user.email_hash).to match(/^[0-9a-f]{32}$/)
     end
 
     it 'should use downcase email' do
-      @user.email = "example@example.com"
-      @user2 = Fabricate(:user)
-      @user2.email = "ExAmPlE@eXaMpLe.com"
+      user.email = "example@example.com"
+      user2 = Fabricate(:user)
+      user2.email = "ExAmPlE@eXaMpLe.com"
 
-      expect(@user.email_hash).to eq(@user2.email_hash)
+      expect(user.email_hash).to eq(user2.email_hash)
     end
 
     it 'should trim whitespace before hashing' do
-      @user.email = "example@example.com"
-      @user2 = Fabricate(:user)
-      @user2.email = " example@example.com "
+      user.email = "example@example.com"
+      user2 = Fabricate(:user)
+      user2.email = " example@example.com "
 
-      expect(@user.email_hash).to eq(@user2.email_hash)
+      expect(user.email_hash).to eq(user2.email_hash)
     end
   end
 
   describe 'associated_accounts' do
     it 'should correctly find social associations' do
-      user = Fabricate(:user)
       expect(user.associated_accounts).to eq([])
 
       UserAssociatedAccount.create(user_id: user.id, provider_name: "twitter", provider_uid: "1", info: { nickname: "sam" })
@@ -552,7 +547,7 @@ describe User do
     end
 
     it 'returns false when a username is taken' do
-      expect(User.username_available?(Fabricate(:user).username)).to eq(false)
+      expect(User.username_available?(user.username)).to eq(false)
     end
 
     it 'returns false when a username is reserved' do
@@ -1202,8 +1197,6 @@ describe User do
   end
 
   describe "primary_group_id" do
-    let!(:user) { Fabricate(:user) }
-
     it "has no primary_group_id by default" do
       expect(user.primary_group_id).to eq(nil)
     end
