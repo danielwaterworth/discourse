@@ -76,14 +76,16 @@ SeedFu.seed
 
 class PreFab
   class << self
-    attr_reader :generic_user
-
-    def prefabricate
-      @generic_user = Fabricate(:user)
+    def generic_user
+      @generic_user ||= User.find(@generic_user_id)
     end
 
-    def reload
-      @generic_user.reload
+    def reset
+      @generic_user = nil
+    end
+
+    def prefabricate
+      @generic_user_id = Fabricate(:user).id
     end
   end
 end
@@ -126,9 +128,7 @@ RSpec.configure do |config|
     end
 
     ActiveRecord::Base.connection.begin_transaction(joinable: false)
-    unless undo_prefab
-      PreFab.reload
-    end
+    PreFab.reset
     example.run
     connection.rollback_transaction if connection.transaction_open?
   end
