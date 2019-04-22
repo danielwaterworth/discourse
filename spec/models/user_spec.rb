@@ -2,7 +2,7 @@ require 'rails_helper'
 require_dependency 'user'
 
 describe User do
-  let(:user) { Fabricate(:user) }
+  let(:user) { PreFab.generic_user }
 
   context 'validations' do
     describe '#username' do
