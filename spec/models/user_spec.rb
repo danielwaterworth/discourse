@@ -110,8 +110,6 @@ describe User do
   end
 
   context '.enqueue_welcome_message' do
-    let(:user) { Fabricate(:user) }
-
     it 'enqueues the system message' do
       Jobs.expects(:enqueue).with(:send_system_message, user_id: user.id, message_type: 'welcome_user')
       user.enqueue_welcome_message('welcome_user')
@@ -754,8 +752,6 @@ describe User do
   end
 
   describe "previous_visit_at" do
-
-    let(:user) { Fabricate(:user) }
     let!(:first_visit_date) { Time.zone.now }
     let!(:second_visit_date) { 2.hours.from_now }
     let!(:third_visit_date) { 5.hours.from_now }
@@ -814,8 +810,6 @@ describe User do
   end
 
   describe "last_seen_at" do
-    let(:user) { Fabricate(:user) }
-
     it "should have a blank last seen on creation" do
       expect(user.last_seen_at).to eq(nil)
     end
@@ -881,8 +875,6 @@ describe User do
   end
 
   describe 'email_confirmed?' do
-    let(:user) { Fabricate(:user) }
-
     context 'when email has not been confirmed yet' do
       it 'should return false' do
         expect(user.email_confirmed?).to eq(false)
@@ -907,7 +899,6 @@ describe User do
   end
 
   describe "flag_linked_posts_as_spam" do
-    let(:user) { Fabricate(:user) }
     let!(:admin) { Fabricate(:admin) }
     let!(:post) { PostCreator.new(user, title: "this topic contains spam", raw: "this post has a link: http://discourse.org").create }
     let!(:another_post) { PostCreator.new(user, title: "this topic also contains spam", raw: "this post has a link: http://discourse.org/asdfa").create }
@@ -1026,7 +1017,6 @@ describe User do
   describe 'api keys' do
     let(:admin) { Fabricate(:admin) }
     let(:other_admin) { Fabricate(:admin) }
-    let(:user) { Fabricate(:user) }
 
     describe '.generate_api_key' do
 
@@ -1413,8 +1403,6 @@ describe User do
   end
 
   describe "number_of_flags_given" do
-
-    let(:user) { Fabricate(:user) }
     let(:moderator) { Fabricate(:moderator) }
 
     it "doesn't count disagreed flags" do
@@ -1433,8 +1421,6 @@ describe User do
   end
 
   describe "number_of_deleted_posts" do
-
-    let(:user) { Fabricate(:user) }
     let(:moderator) { Fabricate(:moderator) }
 
     it "counts all the posts" do
@@ -1545,8 +1531,6 @@ describe User do
   end
 
   describe "#logged_out" do
-    let(:user) { Fabricate(:user) }
-
     it 'should publish the right message' do
       message = MessageBus.track_publish('/logout') { user.logged_out }.first
 
@@ -1597,7 +1581,6 @@ describe User do
   end
 
   describe "#featured_user_badges" do
-    let(:user) { Fabricate(:user) }
     let!(:user_badge_tl1) { UserBadge.create(badge_id: 1, user: user, granted_by: Discourse.system_user, granted_at: Time.now) }
     let!(:user_badge_tl2) { UserBadge.create(badge_id: 2, user: user, granted_by: Discourse.system_user, granted_at: Time.now) }
 
@@ -1611,8 +1594,6 @@ describe User do
   end
 
   describe ".clear_global_notice_if_needed" do
-
-    let(:user) { Fabricate(:user) }
     let(:admin) { Fabricate(:admin) }
 
     before do
