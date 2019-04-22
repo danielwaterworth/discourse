@@ -1274,8 +1274,6 @@ describe User do
     it "enqueues the update_gravatar job when automatically downloading gravatars" do
       SiteSetting.automatically_download_gravatars = true
 
-      user = Fabricate(:user)
-
       Jobs.expects(:enqueue).with(:update_gravatar, anything)
 
       user.refresh_avatar
@@ -1519,7 +1517,6 @@ describe User do
   context UserOption do
 
     it "Creates a UserOption row when a user record is created and destroys once done" do
-      user = Fabricate(:user)
       expect(user.user_option.email_level).to eq(UserOption.email_level_types[:only_when_away])
 
       user_id = user.id
@@ -1648,7 +1645,7 @@ describe User do
   describe "silenced?" do
 
     it "is not silenced by default" do
-      expect(Fabricate(:user)).not_to be_silenced
+      expect(user).not_to be_silenced
     end
 
     it "is not silenced with a date in the past" do
@@ -1682,8 +1679,6 @@ describe User do
     end
 
     it "limits to MAX_UNREAD_NOTIFICATIONS" do
-      user = Fabricate(:user)
-
       4.times do
         Notification.create!(user_id: user.id, notification_type: 1, read: false, data: '{}')
       end
@@ -1966,7 +1961,6 @@ describe User do
 
   context "#destroy!" do
     it 'clears up associated data on destroy!' do
-      user = Fabricate(:user)
       post = Fabricate(:post)
 
       PostActionCreator.like(user, post)
@@ -1989,7 +1983,7 @@ describe User do
 
   context "human?" do
     it "returns true for a regular user" do
-      expect(Fabricate(:user)).to be_human
+      expect(user).to be_human
     end
 
     it "returns false for the system user" do
