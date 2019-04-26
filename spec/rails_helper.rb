@@ -74,8 +74,87 @@ SiteSetting.automatically_download_gravatars = false
 
 SeedFu.seed
 
+module BetterScoping
+  def vars
+    @vars ||= {}
+  end
+
+  def cbs
+    @cbs ||= {}
+  end
+
+  def immediate_list
+    @immediate_list ||= []
+  end
+
+  def with_scope_limit n
+    prev, @limit = @limit, n
+    output = yield
+    @limit = prev
+    output
+  end
+
+  def out_of_current_scope?(n)
+    @limit && n >= @limit
+  end
+
+  def lookup(instance, name)
+    if vars.has_key?(name)
+      vars[name]
+    elsif cbs.has_key?(name)
+      cb, n = cbs[name]
+      if out_of_current_scope?(n)
+        raise NameError.new
+      end
+      with_scope_limit(n) do
+        vars[name] = instance.instance_eval &cb
+      end
+    elsif superclass.respond_to?(:lookup)
+      superclass.lookup(instance, name)
+    else
+      raise NameError.new
+    end
+  end
+
+  def clear_vars
+    self.superclass.clear_vars if self.superclass.respond_to?(:clear_vars)
+    vars.clear
+  end
+
+  def run_immediates(instance)
+    self.superclass.run_immediates(instance) if self.superclass.respond_to?(:run_immediates)
+    immediate_list.each do |x|
+      cb, _ = cbs[x]
+      vars[x] = instance.instance_eval &cb
+    end
+  end
+
+  def let!(name, &blk)
+    let(name, &blk)
+    immediate_list << name
+  end
+
+  def let(name, &blk)
+    define_method(name) do
+      self.class.lookup(self, name)
+    end
+
+    cbs[name] = [blk, cbs.size]
+  end
+
+  def subject(name = nil, &blk)
+    if name
+      let(name, &blk)
+      alias_method :subject, name
+    else
+      let(:subject, &blk)
+    end
+  end
+end
+
 RSpec.configure do |config|
   config.fail_fast = ENV['RSPEC_FAIL_FAST'] == "1"
+  config.extend BetterScoping if ENV['REJECT_WEIRD']
   config.include Helpers
   config.include MessageBus
   config.include RSpecHtmlMatchers
@@ -152,6 +231,7 @@ RSpec.configure do |config|
   end
 
   config.before :each do |x|
+    self.class.clear_vars if ENV['REJECT_WEIRD']
     # TODO not sure about this, we could use a mock redis implementation here:
     #   this gives us really clean "flush" semantics, howere the side-effect is that
     #   we are no longer using a clean redis implementation, a preferable solution may
@@ -191,6 +271,8 @@ RSpec.configure do |config|
     # code that runs inside jobs. run_later! means they are put on the redis
     # queue and never processed.
     Jobs.run_later!
+
+    self.class.run_immediates(self) if ENV['REJECT_WEIRD']
   end
 
   config.before(:each, type: :multisite) do
