@@ -39,36 +39,18 @@ module TurboTests
       check_for_migrations
 
       @num_processes = ParallelTests.determine_number_of_processes(nil)
-      use_runtime_info = @files == ['spec']
 
-      group_opts = {}
-
-      if use_runtime_info
-        group_opts[:runtime_log] = "tmp/turbo_rspec_runtime.log"
-      else
-        group_opts[:group_by] = :filesize
-      end
-
-      tests_in_groups =
-        ParallelTests::RSpec::Runner.tests_in_groups(
-          @files,
-          @num_processes,
-          **group_opts,
-        )
+      tests = ParallelTests::RSpec::Runner.send(:find_tests, @files)
 
       setup_tmp_dir
 
-      subprocess_opts = {
-        record_runtime: use_runtime_info
-      }
+      start_multisite_subprocess(tests)
 
-      start_multisite_subprocess(@files, **subprocess_opts)
-
-      tests_in_groups.each_with_index do |tests, process_id|
-        start_regular_subprocess(tests, process_id + 1, **subprocess_opts)
+      fifos = @num_processes.times.map do |process_id|
+        start_regular_subprocess(process_id + 1)
       end
 
-      handle_messages
+      run_loop(tests, fifos)
 
       @reporter.finish
 
@@ -118,17 +100,74 @@ module TurboTests
       )
     end
 
-    def start_regular_subprocess(tests, process_id, **opts)
-      start_subprocess(
+    def start_regular_subprocess(process_id)
+      start_dynamic_subprocess(
         { 'TEST_ENV_NUMBER' => process_id.to_s },
         ["--tag", "~type:multisite"],
-        tests,
         process_id,
-        **opts
       )
     end
 
-    def start_subprocess(env, extra_args, tests, process_id, record_runtime:)
+    def start_dynamic_subprocess(env, extra_args, process_id)
+      tmp_filename_in = "tmp/test-pipes/subprocess-#{process_id}-in"
+      tmp_filename_out = "tmp/test-pipes/subprocess-#{process_id}-out"
+
+      begin
+        File.mkfifo(tmp_filename_in)
+        File.mkfifo(tmp_filename_out)
+      rescue Errno::EEXIST
+      end
+
+      env['RSPEC_SILENCE_FILTER_ANNOUNCEMENTS'] = '1'
+      env['TEST_LIST_FILE'] = tmp_filename_in
+
+      command = [
+        "bundle", "exec", "./bin/dynamic_rspec",
+        *extra_args,
+        "--seed", rand(2**16).to_s,
+        "--format", "TurboTests::JsonRowsFormatter",
+        "--out", tmp_filename_out,
+      ]
+
+      if @verbose
+        command_str = [
+          env.map { |k, v| "#{k}=#{v}" }.join(' '),
+          command.join(' ')
+        ].select { |x| x.size > 0 }.join(' ')
+
+        STDERR.puts "Process #{process_id}: #{command_str}"
+      end
+
+      stdin, stdout, stderr, wait_thr = Open3.popen3(env, *command)
+      stdin.close
+
+      @threads <<
+        Thread.new do
+          File.open(tmp_filename_out) do |fd|
+            fd.each_line do |line|
+              message = JSON.parse(line)
+              message = message.symbolize_keys
+              message[:process_id] = process_id
+              @messages << message
+            end
+          end
+
+          @messages << { type: 'exit', process_id: process_id }
+        end
+
+      @threads << start_copy_thread(stdout, STDOUT)
+      @threads << start_copy_thread(stderr, STDERR)
+
+      @threads << Thread.new do
+        if wait_thr.value.exitstatus != 0
+          @messages << { type: 'error' }
+        end
+      end
+
+      File.open(tmp_filename_in, 'w')
+    end
+
+    def start_subprocess(env, extra_args, tests, process_id)
       if tests.empty?
         @messages << {
           type: 'exit',
@@ -144,23 +183,12 @@ module TurboTests
 
         env['RSPEC_SILENCE_FILTER_ANNOUNCEMENTS'] = '1'
 
-        record_runtime_options =
-          if record_runtime
-            [
-              "--format", "ParallelTests::RSpec::RuntimeLogger",
-              "--out", "tmp/turbo_rspec_runtime.log",
-            ]
-          else
-            []
-          end
-
         command = [
           "bundle", "exec", "rspec",
           *extra_args,
           "--seed", rand(2**16).to_s,
           "--format", "TurboTests::JsonRowsFormatter",
           "--out", tmp_filename,
-          *record_runtime_options,
           *tests
         ]
 
@@ -216,7 +244,16 @@ module TurboTests
       end
     end
 
-    def handle_messages
+    def run_loop(files, fifos)
+      fifos.each do |fifo|
+        file = files.pop
+        if file
+          fifo.syswrite(file + "\n")
+        else
+          fifo.close
+        end
+      end
+
       exited = 0
 
       begin
@@ -241,6 +278,16 @@ module TurboTests
             @reporter.message(message[:message])
           when 'seed'
           when 'close'
+            if Integer === message[:process_id]
+              index = message[:process_id] - 1
+              next_file = files.pop
+
+              if next_file
+                fifos[index].syswrite(next_file + "\n")
+              else
+                fifos[index].close
+              end
+            end
           when 'error'
             @reporter.error_outside_of_examples
             @error = true
